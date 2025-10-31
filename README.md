@@ -53,18 +53,6 @@ The backend will be available at `http://localhost:8000`
 
 The frontend will be available at `http://localhost:5173`
 
-## Deployment Checklist
-
-- [ ] Set `DEBUG=False` in production `.env`
-- [ ] Generate and set a secure `SECRET_KEY`
-- [ ] Configure `ALLOWED_HOSTS` with your domain
-- [ ] Set up `CORS_ALLOWED_ORIGINS` with your frontend URL
-- [ ] Use PostgreSQL instead of SQLite for production
-- [ ] Set up static file serving
-- [ ] Configure HTTPS
-- [ ] Set up proper logging
-- [ ] Run `python manage.py collectstatic`
-
 ## Environment Variables
 
 ### Backend (.env)
