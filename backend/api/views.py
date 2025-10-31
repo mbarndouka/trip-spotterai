@@ -33,8 +33,8 @@ def geocode_location(location):
         return GEOCODE_CACHE[cache_key]
     
     try:
-        # Add delay to respect rate limits (1 request per second)
-        time.sleep(1.2)
+        # Add delay to respect rate limits (1 request per second for Nominatim)
+        time.sleep(1.0)
         
         url = f"https://nominatim.openstreetmap.org/search"
         params = {
@@ -86,13 +86,56 @@ def geocode_location(location):
         return None
 
 def get_route(start_coords, end_coords):
-    """Get route - using fallback calculation"""
-    # For now, use fallback to avoid API issues
-    return calculate_fallback_route(start_coords, end_coords)
+    """Get route using OSRM for real road routing with fallback"""
+    try:
+        # Try OSRM first for real road routing
+        print(f"Attempting OSRM routing...")
+        
+        # OSRM API endpoint (public instance)
+        url = f"https://router.project-osrm.org/route/v1/driving/{start_coords['lon']},{start_coords['lat']};{end_coords['lon']},{end_coords['lat']}"
+        
+        params = {
+            'overview': 'full',
+            'geometries': 'geojson',
+            'steps': 'false'
+        }
+        
+        headers = {
+            'User-Agent': 'ELD-Trip-Planner/1.0'
+        }
+        
+        response = requests.get(url, params=params, headers=headers, timeout=15)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            if data.get('code') == 'Ok' and data.get('routes'):
+                route = data['routes'][0]
+                distance_meters = route['distance']
+                duration_seconds = route['duration']
+                geometry = route['geometry']['coordinates']
+                
+                print(f"✓ OSRM routing successful: {distance_meters/1609.34:.1f} miles, {duration_seconds/3600:.1f} hours")
+                
+                return {
+                    'distance': distance_meters / 1609.34,  # Convert to miles
+                    'duration': duration_seconds / 3600,    # Convert to hours
+                    'geometry': geometry  # [lon, lat] format
+                }
+        
+        print(f"OSRM failed or rate limited, using fallback calculation")
+        return calculate_fallback_route(start_coords, end_coords)
+        
+    except requests.Timeout:
+        print("OSRM timeout, using fallback")
+        return calculate_fallback_route(start_coords, end_coords)
+    except Exception as e:
+        print(f"OSRM error: {e}, using fallback")
+        return calculate_fallback_route(start_coords, end_coords)
 
 def calculate_fallback_route(start_coords, end_coords):
-    """Calculate approximate route when API fails"""
-    # Haversine formula for distance
+    """Calculate approximate route when API fails using realistic road distance multiplier"""
+    # Haversine formula for straight-line distance
     lat1, lon1 = math.radians(start_coords['lat']), math.radians(start_coords['lon'])
     lat2, lon2 = math.radians(end_coords['lat']), math.radians(end_coords['lon'])
     
@@ -101,32 +144,75 @@ def calculate_fallback_route(start_coords, end_coords):
     
     a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
     c = 2 * math.asin(math.sqrt(a))
-    distance = 3958.8 * c  # Earth radius in miles
+    straight_distance = 3958.8 * c  # Earth radius in miles
+    
+    # Apply realistic road distance multiplier (roads are not straight)
+    # Typical multiplier is 1.2-1.4x for highways, using 1.3 as average
+    road_distance = straight_distance * 1.3
+    
+    # Create a simple curved path (3 intermediate points) for better visualization
+    geometry = []
+    num_points = 5
+    for i in range(num_points):
+        t = i / (num_points - 1)
+        # Smooth curve interpolation
+        lat = start_coords['lat'] + (end_coords['lat'] - start_coords['lat']) * t
+        lon = start_coords['lon'] + (end_coords['lon'] - start_coords['lon']) * t
+        geometry.append([lon, lat])
     
     return {
-        'distance': distance,
-        'duration': distance / AVERAGE_SPEED,
-        'geometry': [[start_coords['lon'], start_coords['lat']], 
-                     [end_coords['lon'], end_coords['lat']]]
+        'distance': road_distance,
+        'duration': road_distance / AVERAGE_SPEED,
+        'geometry': geometry
     }
 
-def calculate_fuel_stops(route_distance, start_coords, end_coords):
-    """Calculate fuel stop locations along route"""
+def calculate_fuel_stops(route_distance, route_geometry):
+    """Calculate fuel stop locations along the actual route geometry"""
     fuel_stops = []
     num_stops = max(0, math.ceil((route_distance - FUEL_STOP_MILES) / FUEL_STOP_MILES))
     
-    for i in range(num_stops):
-        progress = (i + 1) / (num_stops + 1)
-        stop_coords = {
-            'lat': start_coords['lat'] + (end_coords['lat'] - start_coords['lat']) * progress,
-            'lon': start_coords['lon'] + (end_coords['lon'] - start_coords['lon']) * progress
-        }
-        fuel_stops.append({
-            'location': f"Fuel Stop {i + 1}",
-            'coordinates': stop_coords,
-            'distance_from_start': route_distance * progress,
-            'duration': 0.5  # 30 minutes
-        })
+    if num_stops == 0:
+        return fuel_stops
+    
+    # If we have detailed geometry, place stops along actual route
+    if route_geometry and len(route_geometry) > 2:
+        for i in range(num_stops):
+            # Calculate distance where stop should be
+            stop_distance = (i + 1) * FUEL_STOP_MILES
+            progress = stop_distance / route_distance
+            
+            # Find the geometry point closest to this progress
+            target_index = int(progress * (len(route_geometry) - 1))
+            target_index = min(target_index, len(route_geometry) - 1)
+            
+            stop_coords = route_geometry[target_index]
+            
+            fuel_stops.append({
+                'location': f"Fuel Stop {i + 1}",
+                'coordinates': {
+                    'lat': stop_coords[1],  # geometry is [lon, lat]
+                    'lon': stop_coords[0]
+                },
+                'distance_from_start': stop_distance,
+                'duration': 0.5  # 30 minutes
+            })
+    else:
+        # Fallback to linear interpolation if geometry is simple
+        start_coords = {'lat': route_geometry[0][1], 'lon': route_geometry[0][0]}
+        end_coords = {'lat': route_geometry[-1][1], 'lon': route_geometry[-1][0]}
+        
+        for i in range(num_stops):
+            progress = (i + 1) / (num_stops + 1)
+            stop_coords = {
+                'lat': start_coords['lat'] + (end_coords['lat'] - start_coords['lat']) * progress,
+                'lon': start_coords['lon'] + (end_coords['lon'] - start_coords['lon']) * progress
+            }
+            fuel_stops.append({
+                'location': f"Fuel Stop {i + 1}",
+                'coordinates': stop_coords,
+                'distance_from_start': route_distance * progress,
+                'duration': 0.5
+            })
     
     return fuel_stops
 
@@ -166,9 +252,9 @@ def generate_trip_plan(current_loc, pickup_loc, dropoff_loc, current_cycle_used)
     print(f"Total Distance: {total_distance:.1f} miles")
     print(f"Total Driving Time: {total_driving_time:.1f} hours")
     
-    # Calculate fuel stops
-    fuel_stops_leg1 = calculate_fuel_stops(route_to_pickup['distance'], current_coords, pickup_coords)
-    fuel_stops_leg2 = calculate_fuel_stops(route_to_dropoff['distance'], pickup_coords, dropoff_coords)
+    # Calculate fuel stops along actual route geometry
+    fuel_stops_leg1 = calculate_fuel_stops(route_to_pickup['distance'], route_to_pickup['geometry'])
+    fuel_stops_leg2 = calculate_fuel_stops(route_to_dropoff['distance'], route_to_dropoff['geometry'])
     
     print(f"Fuel Stops: {len(fuel_stops_leg1) + len(fuel_stops_leg2)}")
     

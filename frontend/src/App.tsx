@@ -30,12 +30,12 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-linear-to-br from-indigo-500 via-purple-500 to-pink-500">
       <Header />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Trip Input Form */}
-        <div className="mb-8">
+        <div className="mb-8 animate-fadeIn">
           <TripForm
             values={values}
             onChange={handleChange}
@@ -49,20 +49,16 @@ const App = () => {
 
         {/* Results Section */}
         {result && (
-          <>
+          <div className="space-y-8 animate-slideUp">
             {/* Trip Summary Stats */}
-            <div className="mb-8">
-              <TripSummary result={result} />
-            </div>
+            <TripSummary result={result} />
 
             {/* Map */}
-            <div className="mb-8">
-              <TripMap result={result} />
-            </div>
+            <TripMap result={result} />
 
             {/* ELD Log Sheets */}
             <LogSheetList result={result} />
-          </>
+          </div>
         )}
       </div>
     </div>

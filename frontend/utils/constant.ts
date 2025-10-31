@@ -79,8 +79,8 @@ export const UI_MESSAGES = {
 export const LOG_SHEET = {
   HOURS_PER_DAY: 24,
   STATUS_ROWS: 4,
-  CANVAS_WIDTH: 800,
-  CANVAS_HEIGHT: 250,
+  CANVAS_WIDTH: 1000,
+  CANVAS_HEIGHT: 320,
 } as const;
 
 export default {

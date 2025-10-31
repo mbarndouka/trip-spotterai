@@ -37,40 +37,44 @@ const Input: React.FC<InputProps> = ({
       {label && (
         <label
           htmlFor={name}
-          className="block text-sm font-medium text-gray-700 mb-2"
+          className="flex text-sm font-semibold text-gray-700 mb-2 items-center gap-1"
         >
-          {Icon && <Icon className="w-4 h-4 inline mr-1" />}
+          {Icon && <Icon className="w-4 h-4 text-indigo-600" />}
           {label}
           {required && <span className="text-red-500 ml-1">*</span>}
         </label>
       )}
 
-      <input
-        id={name}
-        name={name}
-        type={type}
-        value={value}
-        onChange={onChange}
-        onBlur={onBlur}
-        placeholder={placeholder}
-        min={min}
-        max={max}
-        step={step}
-        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900 placeholder:text-gray-400 ${
-          hasError ? "border-red-500 focus:ring-red-500" : "border-gray-300"
-        }`}
-        aria-invalid={hasError}
-        aria-describedby={hasError ? `${name}-error` : undefined}
-        {...props}
-      />
+      <div className="relative">
+        <input
+          id={name}
+          name={name}
+          type={type}
+          value={value}
+          onChange={onChange}
+          onBlur={onBlur}
+          placeholder={placeholder}
+          min={min}
+          max={max}
+          step={step}
+          className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200 text-gray-900 placeholder:text-gray-400 bg-white shadow-sm ${
+            hasError
+              ? "border-red-500 focus:ring-red-500/20 focus:border-red-500"
+              : "border-gray-300 hover:border-gray-400"
+          }`}
+          aria-invalid={hasError}
+          aria-describedby={hasError ? `${name}-error` : undefined}
+          {...props}
+        />
+      </div>
 
       {hasError && (
         <p
           id={`${name}-error`}
-          className="mt-1 text-sm text-red-600"
+          className="mt-2 text-sm text-red-600 font-medium flex items-center gap-1"
           role="alert"
         >
-          {error}
+          <span className="text-red-500">⚠</span> {error}
         </p>
       )}
     </div>
